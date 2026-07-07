@@ -1,34 +1,51 @@
 'use client';
-import { useState } from 'react';
-import { Turnstile } from '@marsidev/react-turnstile';
+import { useState, useEffect } from 'react';
 
 export default function MessageForm({ onMessageSent }: { onMessageSent: () => void }) {
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
-  const [turnstileToken, setTurnstileToken] = useState<string>('');
   
-  // Dummy key for local testing. Replace in Vercel with real site key.
-  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '1x00000000000000000000AA';
+  // Anti-bot
+  const [num1, setNum1] = useState(0);
+  const [num2, setNum2] = useState(0);
+  const [mathAnswer, setMathAnswer] = useState('');
+  const [honeypot, setHoneypot] = useState('');
+
+  const generateMath = () => {
+    setNum1(Math.floor(Math.random() * 10) + 1);
+    setNum2(Math.floor(Math.random() * 10) + 1);
+    setMathAnswer('');
+  };
+
+  useEffect(() => {
+    generateMath();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim() || !turnstileToken) return;
+    if (!content.trim() || !mathAnswer.trim()) return;
 
     setLoading(true);
     try {
       const res = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, turnstileToken })
+        body: JSON.stringify({ 
+          content,
+          mathAnswer,
+          num1,
+          num2,
+          honeypot
+        })
       });
       if (res.ok) {
         setContent('');
-        // We do NOT reset the turnstile token immediately so they don't have to solve it twice in a row,
-        // but Turnstile tokens expire. For simplicity, we keep it until reload or we can reset it.
+        generateMath();
         onMessageSent();
       } else {
         const errorData = await res.json();
         alert('Error: ' + errorData.error);
+        generateMath(); // Reset captcha on error
       }
     } catch (err) {
       console.error(err);
@@ -47,14 +64,30 @@ export default function MessageForm({ onMessageSent }: { onMessageSent: () => vo
         required
       />
       
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <Turnstile 
-          siteKey={siteKey} 
-          onSuccess={(token) => setTurnstileToken(token)} 
+      {/* Honeypot field (hidden from users) */}
+      <input 
+        type="text" 
+        style={{ display: 'none' }} 
+        tabIndex={-1} 
+        autoComplete="off"
+        value={honeypot}
+        onChange={(e) => setHoneypot(e.target.value)}
+        placeholder="Do not fill this out"
+      />
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <span>Protección Anti-Bot: ¿Cuánto es <strong>{num1} + {num2}</strong>?</span>
+        <input 
+          type="number" 
+          value={mathAnswer} 
+          onChange={(e) => setMathAnswer(e.target.value)} 
+          required 
+          disabled={loading}
+          style={{ width: '80px', padding: '0.5rem', background: 'var(--background)', color: 'var(--foreground)', border: '1px solid #333' }}
         />
       </div>
 
-      <button type="submit" disabled={loading || !content.trim() || !turnstileToken}>
+      <button type="submit" disabled={loading || !content.trim() || !mathAnswer.trim()}>
         {loading ? 'Enviando...' : 'Enviar y Reiniciar Temporizador'}
       </button>
     </form>

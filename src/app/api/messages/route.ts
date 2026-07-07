@@ -15,30 +15,25 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { content, turnstileToken } = await request.json();
+    const { content, mathAnswer, num1, num2, honeypot } = await request.json();
 
-    if (!turnstileToken) {
-      return NextResponse.json({ error: 'Falta validación CAPTCHA' }, { status: 403 });
+    // 1. Honeypot check (Bots often fill hidden fields)
+    if (honeypot && honeypot.length > 0) {
+      return NextResponse.json({ error: 'Bot detectado por Honeypot' }, { status: 403 });
     }
 
-    // Verify Turnstile token with Cloudflare API
-    const secretKey = process.env.TURNSTILE_SECRET_KEY || '1x0000000000000000000000000000000AA'; // Dummy key as fallback
-    const formData = new URLSearchParams();
-    formData.append('secret', secretKey);
-    formData.append('response', turnstileToken);
-
-    const turnstileRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-      method: 'POST',
-      body: formData,
-    });
+    // 2. Math Captcha check
+    if (!mathAnswer || isNaN(Number(mathAnswer))) {
+      return NextResponse.json({ error: 'Falta validación del CAPTCHA matemático' }, { status: 400 });
+    }
     
-    const turnstileData = await turnstileRes.json();
-    if (!turnstileData.success) {
-      return NextResponse.json({ error: 'Validación CAPTCHA fallida' }, { status: 403 });
+    if (Number(mathAnswer) !== Number(num1) + Number(num2)) {
+      return NextResponse.json({ error: 'El resultado de la suma es incorrecto' }, { status: 403 });
     }
 
+    // 3. Content check
     if (!content || typeof content !== 'string' || content.trim() === '') {
-      return NextResponse.json({ error: 'Message cannot be empty' }, { status: 400 });
+      return NextResponse.json({ error: 'El mensaje no puede estar vacío' }, { status: 400 });
     }
 
     const trimmedContent = content.trim().substring(0, 1000); // limit to 1000 chars
