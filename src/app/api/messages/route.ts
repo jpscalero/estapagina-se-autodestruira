@@ -15,7 +15,27 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { content } = await request.json();
+    const { content, turnstileToken } = await request.json();
+
+    if (!turnstileToken) {
+      return NextResponse.json({ error: 'Falta validación CAPTCHA' }, { status: 403 });
+    }
+
+    // Verify Turnstile token with Cloudflare API
+    const secretKey = process.env.TURNSTILE_SECRET_KEY || '1x0000000000000000000000000000000AA'; // Dummy key as fallback
+    const formData = new URLSearchParams();
+    formData.append('secret', secretKey);
+    formData.append('response', turnstileToken);
+
+    const turnstileRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body: formData,
+    });
+    
+    const turnstileData = await turnstileRes.json();
+    if (!turnstileData.success) {
+      return NextResponse.json({ error: 'Validación CAPTCHA fallida' }, { status: 403 });
+    }
 
     if (!content || typeof content !== 'string' || content.trim() === '') {
       return NextResponse.json({ error: 'Message cannot be empty' }, { status: 400 });
