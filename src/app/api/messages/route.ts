@@ -38,7 +38,15 @@ export async function POST(request: Request) {
 
     const trimmedContent = content.trim().substring(0, 1000); // limit to 1000 chars
 
-    await db.addMessage(trimmedContent);
+    // Sanitización Extrema: Encoding de HTML para evitar XSS
+    const sanitizedContent = trimmedContent
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+
+    await db.addMessage(sanitizedContent);
 
     return NextResponse.json({ success: true });
   } catch (error) {
